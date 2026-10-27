@@ -281,11 +281,14 @@ textarea{width:100%;min-height:170px;font:14px var(--mono);border:1px solid var(
 
 <script>
 const $=id=>document.getElementById(id);
-const leer=v=>{if(typeof v==="number")return v;let s=String(v==null?"":v).replace(/[\s$]/g,"");if(!s)return 0;
+// Dólares: el punto es siempre decimal (3.834 = 3,834). Pesos: el punto puede ser de miles (15.000 = 15000).
+const leer=(v,cup)=>{if(typeof v==="number")return v;let s=String(v==null?"":v).replace(/[\s$]/g,"");if(!s)return 0;
   if(s.includes(",")&&s.includes(".")){s=s.lastIndexOf(",")>s.lastIndexOf(".")?s.replace(/\./g,"").replace(",","."):s.replace(/,/g,"");}
-  else if(s.includes(",")){s=(/^\d{1,3}(,\d{3})+$/.test(s)&&!/^0,/.test(s))?s.replace(/,/g,""):s.replace(",",".");}
-  else if(/^\d{1,3}(\.\d{3})+$/.test(s)&&!/^0\./.test(s)){s=s.replace(/\./g,"");}
+  else if(s.includes(",")){s=(cup&&/^\d{1,3}(,\d{3})+$/.test(s))?s.replace(/,/g,""):s.replace(",",".");}
+  else if(cup&&/^\d{1,3}(\.\d{3})+$/.test(s)&&!/^0\./.test(s)){s=s.replace(/\./g,"");}
+  else if((s.match(/\./g)||[]).length>1){s=s.replace(/\./g,"");}
   return parseFloat(s)||0;};
+const numC=v=>Math.max(0,leer(v,true));
 const num=v=>Math.max(0,leer(v));
 const usd=v=>{const a=Math.abs(v),c=a<100&&Math.round(a*100)%100!==0;return (v<0?"-$":"$")+(c?a.toLocaleString("es",{minimumFractionDigits:2,maximumFractionDigits:2}):Math.round(a).toLocaleString("es"));};
 const cup=v=>(v<0?"-":"")+Math.abs(Math.round(v)).toLocaleString("es")+" CUP";
@@ -539,7 +542,7 @@ function hojaVenta(R){
     ${(p.ventas||[]).length?`<div class="f" style="gap:6px">Ventas anotadas${p.ventas.map((s,k)=>`<div class="entry"><span class="c">${num(s.q)} × ${pTxt(num(s.p),s.mon)}<small>${fcorta(s.f)}${s.mon==="CUP"?" · dólar a "+Math.round(num(s.tasa)||T()):""}</small></span><span class="m">${usd(num(s.q)*toUSD(s.p,s.mon,s.tasa))}</span><button type="button" class="x" data-dv="${k}" aria-label="Borrar esta venta">×</button></div>`).join("")}</div>`:""}`);
   vTot();
 }
-function vTot(){const el=$("vTot");if(!el)return;const q=num($("vCant").value),pr=num($("vPre").value),tot=q*pr;
+function vTot(){const el=$("vTot");if(!el)return;const q=num($("vCant").value),pr=(F.mon==="CUP"?numC:num)($("vPre").value),tot=q*pr;
   el.textContent=tot?(F.mon==="CUP"?`${cup(tot)} ≈ ${usd(tot/T())}`:`${usd(tot)} ≈ ${cup(tot*T())}`):"";}
 function agencias(){let a={};try{a=JSON.parse(localStorage.getItem("mdev-agencias")||"{}")||{};}catch(e){}return a;}
 function hojaEnvio(){
@@ -649,17 +652,17 @@ document.addEventListener("click",ev=>{
     case "nuevo2X":try{localStorage.setItem("mdev-v2visto","1");}catch(e){}$("nuevo2").hidden=true;break;
     case "limpiarEj":{const X=nuevoViaje();S.viajes=S.viajes.filter(Y=>!Y.ejemplo);S.viajes.push(X);S.act=X.id;pintar();toast("Listo. Toca el + para anotar tu primer gasto.");break;}
     case "nvCrear":{const X=nuevoViaje($("nvNombre").value.trim());S.viajes=S.viajes.filter(Y=>!Y.ejemplo);S.viajes.push(X);S.act=X.id;vistaC="viaje";pintar();cerrar();ir("inicio");toast("Viaje nuevo: "+X.nombre);break;}
-    case "gAdd":{const c=$("gConcepto").value.trim(),u=num($("gUsd").value),p=num($("gCup").value);
+    case "gAdd":{const c=$("gConcepto").value.trim(),u=num($("gUsd").value),p=numC($("gCup").value);
       if(!c||(!u&&!p)){$("gMsg").textContent="Escribe en qué lo gastaste y cuánto pagaste.";break;}
       V().gastos.push({e:F.e,c,usd:u,cup:p,tasa:T()});pintar();cerrar();toast("Gasto anotado: "+c);break;}
-    case "cAdd":{const n=$("cNombre").value.trim(),q=num($("cCant").value),c=num($("cCosto").value),p=num($("cPrecio").value);
+    case "cAdd":{const n=$("cNombre").value.trim(),q=num($("cCant").value),c=num($("cCosto").value),p=(F.mon==="CUP"?numC:num)($("cPrecio").value);
       if(!n||!q||!c){$("cMsg").textContent="Pon el producto, la cantidad y lo que te costó cada uno.";break;}
       if(F.mon==="USD"&&p>Math.max(100,c*15)&&!F.okUSD){F.okUSD=true;$("cMsg").innerHTML=`¿Seguro que lo vendes en <strong>dólares</strong>? Pusiste <strong>$${p.toLocaleString("es")}</strong> por algo que te costó $${c}. Si es en pesos, toca <strong>CUP</strong>. Si de verdad es en dólares, toca otra vez el botón.`;break;}
       if(F.edit!==undefined){const o=deRef(F.edit),vend=vendidos(o.p);
         if(q<vend){$("cMsg").textContent=`Ya anotaste ${vend} vendidos. La cantidad no puede ser menos de ${vend}.`;break;}
         Object.assign(o.p,{n,q,c,p,mon:F.mon,via:$("cVia").value,tipo:$("cTipo").value});pintar();cerrar();toast("Compra guardada: "+n);}
       else{V().compras.push({n,q,c,p,mon:F.mon,via:$("cVia").value,tipo:$("cTipo").value,ventas:[]});pintar();cerrar();toast("Compra anotada: "+q+" "+n);}break;}
-    case "vAdd":{const o=deRef(F.ref),q=num($("vCant").value),pr=num($("vPre").value),rest=num(o.p.q)-vendidos(o.p);
+    case "vAdd":{const o=deRef(F.ref),q=num($("vCant").value),pr=(F.mon==="CUP"?numC:num)($("vPre").value),rest=num(o.p.q)-vendidos(o.p);
       if(!q||!pr){$("vMsg").textContent="Pon cuántos vendiste y a cuánto cada uno.";break;}
       if(q>rest){$("vMsg").textContent=`Solo te quedan ${rest}.`;break;}
       o.p.ventas=o.p.ventas||[];o.p.ventas.push({q,p:pr,mon:F.mon,tasa:T(),f:hoy()});pintar();cerrar();toast(`Venta anotada: ${q} ${o.p.n}`);break;}
@@ -668,9 +671,9 @@ document.addEventListener("click",ev=>{
       V().gastos.push({e:"envio",c:`${n} envío${n===1?"":"s"} de ${kg} kg${ag?" · "+ag:""}`,usd:n*pu,cup:0,tasa:T(),env:{n,kg,pu}});
       try{const A=agencias(),k=ag||"Mi agencia";A[k]={pu,kg};A._ultima=k;localStorage.setItem("mdev-agencias",JSON.stringify(A));}catch(e){}
       pintar();cerrar();toast(`Envío anotado: ${n} paquete${n===1?"":"s"}`);break;}
-    case "kSave":{const u=num($("kUsd").value),p=num($("kCup").value);if(!u&&!p){$("kMsg").textContent="Escribe con cuánto dinero sales.";break;}
+    case "kSave":{const u=num($("kUsd").value),p=numC($("kCup").value);if(!u&&!p){$("kMsg").textContent="Escribe con cuánto dinero sales.";break;}
       V().capital={usd:u,cup:p};pintar();cerrar();toast("Guardado: tu dinero del viaje");break;}
-    case "dSave":S.tasa=num($("dTasa").value)||T();pintar();cerrar();toast("Dólar de hoy: "+Math.round(T())+" CUP");break;
+    case "dSave":S.tasa=numC($("dTasa").value)||T();pintar();cerrar();toast("Dólar de hoy: "+Math.round(T())+" CUP");break;
     case "aSave":V().nombre=$("aNombre").value.trim()||"Mi viaje";pintar();cerrar();toast("Guardado");break;
     case "aReset":$("aConfirm").hidden=false;break;
     case "aNo":$("aConfirm").hidden=true;break;
