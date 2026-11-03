@@ -1,0 +1,21 @@
+{
+ "name": "¿Me da el viaje?",
+ "short_name": "Me da el viaje",
+ "description": "Saca la cuenta de tu viaje de compras a Panamá: gastos en dólares y pesos, compras, ventas y ganancia real.",
+ "lang": "es",
+ "start_url": "./",
+ "scope": "./",
+ "id": "./",
+ "display": "standalone",
+ "orientation": "portrait",
+ "background_color": "#10302c",
+ "theme_color": "#10302c",
+ "icons": [
+  {
+   "src": "icono.png",
+   "sizes": "512x512",
+   "type": "image/png",
+   "purpose": "any"
+  }
+ ]
+}
