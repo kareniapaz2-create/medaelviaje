@@ -343,24 +343,30 @@ const T=()=>num(S.tasa)||1;
 const NUEVA="https://kareniapaz2-create.github.io/medaelviaje/";
 const enNetlify=/netlify\.app$/i.test(location.hostname);
 let llegaron=false;
+function meterDatos(code){
+  const P=JSON.parse(decodeURIComponent(escape(atob(String(code).replace(/\s/g,"")))));
+  if(!(P&&Array.isArray(P.viajes)&&P.viajes.length))return 0;
+  const ids=new Set(S.viajes.map(v=>v.id)),nuevos=P.viajes.filter(v=>!v.ejemplo&&!ids.has(v.id));
+  S.viajes=S.viajes.filter(v=>!v.ejemplo).concat(nuevos);
+  if(!S.viajes.length)S.viajes=[nuevoViaje()];
+  S.act=S.viajes.some(v=>v.id===P.act)?P.act:S.viajes[S.viajes.length-1].id;
+  if(num(P.tasa))S.tasa=num(P.tasa);
+  if(P.agencias){try{const A=JSON.parse(localStorage.getItem("mdev-agencias")||"{}")||{};localStorage.setItem("mdev-agencias",JSON.stringify(Object.assign(P.agencias,A)));}catch(e){}}
+  localStorage.setItem(KEY,JSON.stringify(S));return nuevos.length||1;
+}
+function codigoDatos(){
+  let A=null;try{A=JSON.parse(localStorage.getItem("mdev-agencias")||"null");}catch(e){}
+  const reales=S.viajes.filter(v=>!v.ejemplo);
+  if(!reales.length)return "";
+  return btoa(unescape(encodeURIComponent(JSON.stringify({viajes:reales,act:S.act,tasa:S.tasa,agencias:A}))));
+}
 try{const m=location.hash.match(/importar=([^&]+)/);
-  if(m){const P=JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(m[1])))));
-    if(P&&Array.isArray(P.viajes)&&P.viajes.length){
-      const ids=new Set(S.viajes.map(v=>v.id));
-      S.viajes=S.viajes.filter(v=>!v.ejemplo).concat(P.viajes.filter(v=>!v.ejemplo&&!ids.has(v.id)));
-      if(!S.viajes.length)S.viajes=[nuevoViaje()];
-      S.act=S.viajes.some(v=>v.id===P.act)?P.act:S.viajes[S.viajes.length-1].id;
-      if(num(P.tasa))S.tasa=num(P.tasa);
-      if(P.agencias){try{const A=JSON.parse(localStorage.getItem("mdev-agencias")||"{}")||{};localStorage.setItem("mdev-agencias",JSON.stringify(Object.assign(P.agencias,A)));}catch(e){}}
-      localStorage.setItem(KEY,JSON.stringify(S));llegaron=true;}
+  if(m){if(meterDatos(decodeURIComponent(m[1])))llegaron=true;
     history.replaceState(null,"",location.pathname+location.search);}
 }catch(e){}
 function llevarDatos(){
-  let A=null;try{A=JSON.parse(localStorage.getItem("mdev-agencias")||"null");}catch(e){}
-  const reales=S.viajes.filter(v=>!v.ejemplo);
-  if(!reales.length){location.href=NUEVA;return;}
-  const P={viajes:reales,act:S.act,tasa:S.tasa,agencias:A};
-  const code=btoa(unescape(encodeURIComponent(JSON.stringify(P))));
+  const code=codigoDatos();
+  if(!code){location.href=NUEVA;return;}
   location.href=NUEVA+"#importar="+encodeURIComponent(code);
 }
 function VI(){let i=S.viajes.findIndex(v=>v.id===S.act);if(i<0){i=0;S.act=S.viajes[0].id;}return i;}
@@ -585,7 +591,13 @@ function hojaAjustes(){
     <button type="button" id="aSave">Guardar</button>
     <button type="button" class="ghost" id="irDolar">Cambiar el dólar de hoy</button>
     <button type="button" class="ghost" id="aReset">Borrar este viaje</button>
-    <div id="aConfirm" hidden style="display:flex;flex-direction:column;gap:8px"><p class="note" style="color:var(--bad)">Se borran sus gastos, compras y ventas. Tus otros viajes no se tocan.</p><div class="g2"><button type="button" class="danger" id="aSi">Sí, borrar</button><button type="button" class="ghost" id="aNo">No</button></div></div>`);
+    <div id="aConfirm" hidden style="display:flex;flex-direction:column;gap:8px"><p class="note" style="color:var(--bad)">Se borran sus gastos, compras y ventas. Tus otros viajes no se tocan.</p><div class="g2"><button type="button" class="danger" id="aSi">Sí, borrar</button><button type="button" class="ghost" id="aNo">No</button></div></div>
+    <h2 style="margin-top:18px">📲 Pasar mis datos</h2>
+    <p class="note">Para llevar tus viajes a la app de Play Store, a otro navegador o a otro teléfono. <strong>1.</strong> Aquí toca "Copiar mis datos". <strong>2.</strong> Abre la otra app, entra a ⚙, pega el código y toca "Pegar mis datos".</p>
+    <button type="button" class="ghost" id="pCopiar">Copiar mis datos</button>
+    <textarea id="pCode" rows="3" placeholder="Pega aquí el código de tus datos" style="width:100%;font:inherit;font-size:14px;padding:10px;border-radius:12px;border:1px solid #cfd8d5;box-sizing:border-box"></textarea>
+    <button type="button" class="ghost" id="pPegar">Pegar mis datos</button>
+    <p class="note" id="pMsg"></p>`);
 }
 function hojaViajes(){
   const xi=VI();
@@ -677,6 +689,15 @@ document.addEventListener("click",ev=>{
       V().capital={usd:u,cup:p};pintar();cerrar();toast("Guardado: tu dinero del viaje");break;}
     case "dSave":S.tasa=numC($("dTasa").value)||T();pintar();cerrar();toast("Dólar de hoy: "+Math.round(T())+" CUP");break;
     case "aSave":V().nombre=$("aNombre").value.trim()||"Mi viaje";pintar();cerrar();toast("Guardado");break;
+    case "pCopiar":{const code=codigoDatos();if(!code){$("pMsg").textContent="Todavía no tienes viajes tuyos para pasar.";break;}
+      gc("copio-datos","Copió sus datos");const t=$("pCode");t.value=code;
+      const ok=()=>{$("pMsg").textContent="✅ Copiado. Ahora abre la otra app, entra a ⚙ y pégalo abajo.";};
+      const fb=()=>{t.focus();t.select();$("pMsg").textContent="Mantén presionado el código de arriba y toca Copiar.";};
+      try{navigator.clipboard.writeText(code).then(ok,fb);}catch(e){fb();}break;}
+    case "pPegar":{const v=$("pCode").value.trim();if(!v){$("pMsg").textContent="Primero pega el código en el cuadro.";break;}
+      let n=0;try{n=meterDatos(v);}catch(e){n=0;}
+      if(!n){$("pMsg").textContent="Ese código no sirve. Cópialo otra vez completo.";break;}
+      gc("pego-datos","Pegó sus datos");pintar();cerrar();ir("inicio");toast("¡Listo! Tus datos llegaron");break;}
     case "aReset":$("aConfirm").hidden=false;break;
     case "aNo":$("aConfirm").hidden=true;break;
     case "aSi":{S.viajes.splice(VI(),1);if(!S.viajes.length)S.viajes.push(nuevoViaje());S.act=S.viajes[S.viajes.length-1].id;pintar();cerrar();ir("inicio");toast("Viaje borrado");break;}
