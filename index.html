@@ -180,10 +180,22 @@ textarea{width:100%;min-height:170px;font:14px var(--mono);border:1px solid var(
 .sold .vbtn.listo{background:var(--soft);color:var(--good);border:1px solid var(--line)}
 .sold output{text-align:left}
 </style>
-<style>:root{padding-top:env(safe-area-inset-top,0px)}img{max-width:100%}[hidden]{display:none!important}</style>
+<style>:root{padding-top:env(safe-area-inset-top,0px)}img{max-width:100%}[hidden]{display:none!important}
+#splash{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 40%,#2c665d,#10302c 75%);transition:opacity .45s ease}
+#splash img{width:min(78vw,420px);height:auto;border-radius:18%;box-shadow:0 18px 50px rgba(0,0,0,.45);animation:spl .6s ease-out both}
+#splash.fuera{opacity:0;pointer-events:none}
+@keyframes spl{from{transform:scale(.86);opacity:0}to{transform:scale(1);opacity:1}}</style>
 <link rel="manifest" href="manifest.json">
 </head>
 <body>
+<div id="splash" aria-hidden="true"><img src="presentacion.jpg" alt=""></div>
+<script>
+(function(){var sp=document.getElementById("splash"),ok=false;
+function quitar(){if(ok)return;ok=true;sp.classList.add("fuera");setTimeout(function(){sp.remove();},500);}
+try{if(sessionStorage.getItem("mdev-splash")==="1"){sp.remove();return;}sessionStorage.setItem("mdev-splash","1");}catch(e){}
+sp.addEventListener("click",quitar);setTimeout(quitar,1800);
+var im=sp.querySelector("img");im.onerror=quitar;})();
+</script>
 
 
 <div class="app">
