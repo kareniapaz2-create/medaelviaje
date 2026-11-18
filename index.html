@@ -499,7 +499,7 @@ function prodHTML(ti,ci,p,factor){
   else{const lim=(p.tipo==="otro"&&num(p.c)>50)?3:5;if(q>lim&&p.via==="maleta")al+=`<div class="tag">Llevas ${q} iguales en la maleta. La Aduana puede ver los que pasen de ${lim} como para vender y cobrártelos en dólares.</div>`;}
   return `<div class="prod">
     <div class="top2"><div><strong>${q} × ${esc(p.n)}</strong><small>${p.via==="maleta"?"En la maleta":"Por envío"} · ${ETQ[p.tipo]||""}</small></div><span style="display:flex;gap:4px;align-items:center"><button type="button" class="edit" data-ec="${R}">Editar</button><button type="button" class="x" data-dc="${R}" aria-label="Borrar ${esc(p.n)}">×</button></span></div>
-    <div class="pout"><span>Invertiste <b>${usd(q*num(p.c))}</b></span><span>Vendes a <b>${pTxt(num(p.p),p.mon)}</b></span><span>Mínimo <b>${p.mon==="CUP"?cup(min*t):usd(min)}</b></span></div>
+    <div class="pout"><span>Invertiste <b>${usd(q*num(p.c))}</b></span><span>Vendes a <b>${pTxt(num(p.p),p.mon)}</b></span>${num(p.p)?(()=>{const gu=p.mon==="CUP"?num(p.p)-num(p.c)*t:num(p.p)-num(p.c);const txt=p.mon==="CUP"?cup(Math.abs(gu)):usd(Math.abs(gu));return gu>=0?`<span>Ganas <b style="color:var(--good)">${txt}</b> c/u</span>`:`<span>Pierdes <b style="color:var(--bad)">${txt}</b> c/u</span>`;})():""}</div>
     <div class="sold"><output>${vend} de ${q} vendidos<br><small style="color:var(--muted)">cobrado ${usd(co)}${rest?" · quedan "+rest:""}</small></output>${rest?`<button type="button" class="vbtn" data-vender="${R}">+ Anotar venta</button>`:`<button type="button" class="vbtn listo" data-vender="${R}">✓ Vendido</button>`}</div>
     <div class="prog"><i style="width:${q?vend/q*100:0}%"></i></div>${al}</div>`;
 }
