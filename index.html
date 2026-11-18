@@ -110,6 +110,7 @@ h2{font-family:var(--display);font-weight:600;font-size:19px;margin:0}
 .small{padding:9px 12px;font-size:14px;align-self:flex-start;background:var(--soft);color:var(--ink);border:1px solid var(--line)}
 .edit{background:transparent;color:var(--teal);border:1px solid var(--line);padding:6px 10px;font-size:13px}
 .duena{border-color:var(--teal)}
+.cl-l{display:flex;flex-direction:column;gap:6px;margin:6px 0}.cl-l>div{display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--soft);border-radius:10px;padding:8px 10px}.cl-l b{white-space:nowrap}
 .dgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .dgrid div{background:var(--soft);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:2px;min-width:0}
 .dgrid b{font-family:var(--mono);font-size:22px;font-weight:500}
@@ -211,6 +212,7 @@ var im=sp.querySelector("img");im.onerror=quitar;})();
       <div class="sh"><strong>📊 Mis números</strong><span>solo lo ves tú</span></div>
       <div class="dgrid" id="dgrid"><span class="note">Cargando…</span></div>
       <p class="note">Desde el 15 de octubre. Se actualiza cada pocas horas. Las 432 personas del primer día están en Netlify.</p>
+      <button type="button" id="dClientas" style="margin:8px 0">🧾 Mis clientas de encargo</button>
       <div class="dlinks"><a href="https://comprandoenpanama.goatcounter.com" target="_blank" rel="noopener">Ver detalle completo</a><button type="button" class="edit" id="dRefresh">Actualizar</button><button type="button" class="edit" id="dSalir">Ocultar panel</button></div>
     </div>
     <div class="instalar" id="instalar" hidden>
@@ -358,6 +360,7 @@ let llegaron=false;
 function meterDatos(code){
   const P=JSON.parse(decodeURIComponent(escape(atob(String(code).replace(/\s/g,"")))));
   if(!(P&&Array.isArray(P.viajes)&&P.viajes.length))return 0;
+  if(Array.isArray(P.clientas)&&P.clientas.length){try{const Y=JSON.parse(localStorage.getItem("mdev-clientas")||"[]")||[],ids2=new Set(Y.map(x=>x.id));localStorage.setItem("mdev-clientas",JSON.stringify(Y.concat(P.clientas.filter(x=>!ids2.has(x.id)))));}catch(e){}}
   const ids=new Set(S.viajes.map(v=>v.id)),nuevos=P.viajes.filter(v=>!v.ejemplo&&!ids.has(v.id));
   S.viajes=S.viajes.filter(v=>!v.ejemplo).concat(nuevos);
   if(!S.viajes.length)S.viajes=[nuevoViaje()];
@@ -370,7 +373,8 @@ function codigoDatos(){
   let A=null;try{A=JSON.parse(localStorage.getItem("mdev-agencias")||"null");}catch(e){}
   const reales=S.viajes.filter(v=>!v.ejemplo);
   if(!reales.length)return "";
-  return btoa(unescape(encodeURIComponent(JSON.stringify({viajes:reales,act:S.act,tasa:S.tasa,agencias:A}))));
+  let C=null;try{C=JSON.parse(localStorage.getItem("mdev-clientas")||"null");}catch(e){}
+  return btoa(unescape(encodeURIComponent(JSON.stringify({viajes:reales,act:S.act,tasa:S.tasa,agencias:A,clientas:C}))));
 }
 try{const m=location.hash.match(/importar=([^&]+)/);
   if(m){if(meterDatos(decodeURIComponent(m[1])))llegaron=true;
@@ -785,6 +789,107 @@ function panelDuena(){
     $("dgrid").innerHTML=items.map((i,k)=>`<div><b>${v[k]===null?"—":v[k].toLocaleString("es")}</b><span>${i[1]}</span></div>`).join("");});
 }
 document.addEventListener("click",e=>{if(e.target.id==="dRefresh")panelDuena();if(e.target.id==="dSalir"){try{localStorage.removeItem("mdev-duena");}catch(x){}panelDuena();toast("Panel oculto. Toca 5 veces el nombre de arriba para verlo otra vez.");}});
+// ---------- clientas de encargo (solo la dueña) ----------
+const CK="mdev-clientas";
+let CL=[];try{CL=JSON.parse(localStorage.getItem(CK)||"[]")||[];}catch(e){CL=[];}
+let cAct=null;
+function cGuardar(){try{localStorage.setItem(CK,JSON.stringify(CL));}catch(e){}}
+function cCalc(c){
+  const dep=(c.dep||[]).reduce((a,d)=>a+num(d.m),0);
+  const compras=(c.items||[]).reduce((a,i)=>a+num(i.q)*num(i.c),0);
+  const nb=Math.max(0,Math.round(num(c.nb))),envio=nb*num(c.env),gest=nb*num(c.gest),extra=envio+gest;
+  const t=T(),uds=(c.items||[]).reduce((a,i)=>a+num(i.q),0);
+  const items=(c.items||[]).map(i=>{const q=num(i.q),cu=num(i.c),parte=compras>0?extra*(q*cu)/compras/(q||1):0,puesto=cu+parte;
+    const pv=num(i.pv)||Math.round(puesto*1.3*t/50)*50;const gan=pv-puesto*t;return {...i,q,cu,puesto,pv,gan,ganT:gan*q};});
+  return {dep,compras,nb,envio,gest,extra,queda:dep-compras-extra,uds,items,ganT:items.reduce((a,i)=>a+i.ganT,0),ventaT:items.reduce((a,i)=>a+i.pv*i.q,0)};
+}
+function cLista(){
+  abrir(`<h2>🧾 Mis clientas</h2><p class="note">Solo lo ves tú. Anota lo que te mandan y lo que les compras.</p>
+  <div class="choose">${CL.map(c=>{const r=cCalc(c);return `<button type="button" data-cli="${c.id}"><i>👤</i><span>${esc(c.n)}<small>Mandó ${usd(r.dep)} · le queda ${usd(r.queda)} · ${r.nb} bulto${r.nb===1?"":"s"}</small></span></button>`;}).join("")||'<p class="note">Todavía no tienes clientas anotadas.</p>'}</div>
+  <label class="f" for="clN">Nombre de la clienta<div class="inp"><input id="clN" type="text" placeholder="Ej.: María"></div></label>
+  <label class="f" for="clW">Su WhatsApp con código del país<div class="inp"><input id="clW" type="text" inputmode="tel" placeholder="Ej.: 5355551234"></div></label>
+  <button type="button" id="clAdd">+ Agregar clienta</button><p class="note" id="clMsg"></p>`);
+}
+function cFicha(id){
+  const c=CL.find(x=>x.id===id);if(!c){cLista();return;}cAct=id;const r=cCalc(c),t=T();
+  abrir(`<h2>👤 ${esc(c.n)}</h2>
+  <div class="cl-l">
+   <div><span>💵 Me mandó</span><b>${usd(r.dep)}</b></div>
+   <div><span>🛍️ Compras</span><b>-${usd(r.compras)}</b></div>
+   <div><span>📦 Envío (${r.nb} × ${usd(num(c.env))})</span><b>-${usd(r.envio)}</b></div>
+   <div><span>🤝 Mi gestión (${r.nb} × ${usd(num(c.gest))})</span><b>-${usd(r.gest)}</b></div>
+   <div><span><strong>${r.queda>=0?"✅ Le queda":"⚠️ Me debe"}</strong></span><b style="color:var(${r.queda>=0?"--good":"--bad"})">${usd(Math.abs(r.queda))}</b></div>
+  </div>
+  <a class="wabtn" id="clWa" href="${cWaLink(c)}" target="_blank" rel="noopener">📲 Mandarle su cuenta por WhatsApp</a>
+  <h2 style="margin-top:14px">💵 Dinero que me mandó</h2>
+  ${(c.dep||[]).map((d,k)=>`<div class="cl-l"><div><span>${esc(d.f||"")}</span><b>${usd(num(d.m))} <button type="button" class="x" data-cdd="${k}" aria-label="Borrar">×</button></b></div></div>`).join("")}
+  <div class="g2"><label class="f" for="cdM">Cuánto (USD)<div class="inp"><span>$</span><input id="cdM" type="text" inputmode="decimal" placeholder="0"></div></label>
+  <label class="f" for="cdF">Fecha o nota<div class="inp"><input id="cdF" type="text" value="${esc(hoy())}"></div></label></div>
+  <button type="button" class="ghost" id="cdAdd">+ Anotar dinero recibido</button>
+  <h2 style="margin-top:14px">🛍️ Lo que le compré</h2>
+  ${r.items.map((i,k)=>`<div class="prod"><div class="top2"><div><strong>${i.q} × ${esc(i.n)}</strong><small>Bulto ${esc(i.b||"1")} · ${usd(i.cu)} c/u · puesto en Cuba ${usd(i.puesto)} c/u</small></div><button type="button" class="x" data-cdi="${k}" aria-label="Borrar ${esc(i.n)}">×</button></div>
+    <label class="f">Precio de venta en Cuba (CUP c/u) — cámbialo si quieres<div class="inp"><input type="text" inputmode="numeric" data-cpv="${k}" value="${i.pv}"><span>CUP</span></div></label>
+    <p class="note" style="color:var(${i.gan>=0?"--good":"--bad"})">${i.gan>=0?"Ganaría":"Perdería"} ${cup(Math.abs(i.gan))} c/u · ${cup(Math.abs(i.ganT))} en total</p></div>`).join("")||'<p class="note">Todavía no hay compras.</p>'}
+  <label class="f" for="ciN">Producto<div class="inp"><input id="ciN" type="text" placeholder="Ej.: Blusas"></div></label>
+  <div class="g2"><label class="f" for="ciQ">Cantidad<div class="inp"><input id="ciQ" type="text" inputmode="numeric" placeholder="1"></div></label>
+  <label class="f" for="ciC">Costo de CADA UNO<div class="inp"><span>$</span><input id="ciC" type="text" inputmode="decimal" placeholder="0"></div></label></div>
+  <label class="f" for="ciB">Va en el bulto número<div class="inp"><input id="ciB" type="text" inputmode="numeric" value="${Math.max(1,r.nb)}"></div></label>
+  <p class="note" id="ciTot"></p>
+  <button type="button" class="ghost" id="ciAdd">+ Anotar compra</button><p class="note" id="ciMsg"></p>
+  <h2 style="margin-top:14px">📦 Bultos y cobros</h2>
+  <div class="g2"><label class="f" for="cbN">Cantidad de bultos<div class="inp"><input id="cbN" type="text" inputmode="numeric" value="${r.nb}"></div></label>
+  <label class="f" for="cbE">Envío por bulto<div class="inp"><span>$</span><input id="cbE" type="text" inputmode="decimal" value="${num(c.env)}"></div></label></div>
+  <label class="f" for="cbG">Mi gestión por bulto<div class="inp"><span>$</span><input id="cbG" type="text" inputmode="decimal" value="${num(c.gest)}"></div></label>
+  <button type="button" class="ghost" id="cbSave">Guardar bultos</button>
+  <p class="note">Precio sugerido = lo que costó puesto en Cuba + 30 %, al dólar de ${Math.round(t)} CUP. Cámbialo cuando quieras.</p>
+  <div class="g2"><button type="button" class="ghost" id="clVolver">← Mis clientas</button><button type="button" class="ghost" id="clBorrar">Borrar clienta</button></div>
+  <div id="clConf" hidden><p class="note" style="color:var(--bad)">Se borra todo lo de ${esc(c.n)}.</p><div class="g2"><button type="button" class="danger" id="clSi">Sí, borrar</button><button type="button" class="ghost" id="clNo">No</button></div></div>`);
+}
+function cTexto(c){
+  const r=cCalc(c),L=[`Hola ${c.n} 💚 Esta es tu cuenta de compras:`,"",`💵 Me mandaste: ${usd(r.dep)}`];
+  (c.dep||[]).forEach(d=>L.push(`   • ${d.f||""}: ${usd(num(d.m))}`));
+  L.push("",`🛍️ Lo que te compré: ${usd(r.compras)}`);
+  r.items.forEach(i=>L.push(`   • ${i.q} × ${i.n} (bulto ${i.b||1}) a ${usd(i.cu)} = ${usd(i.q*i.cu)}`));
+  L.push("",`📦 Envío: ${r.nb} bulto${r.nb===1?"":"s"} × ${usd(num(c.env))} = ${usd(r.envio)}`,`🤝 Gestión: ${r.nb} × ${usd(num(c.gest))} = ${usd(r.gest)}`,"",
+    r.queda>=0?`✅ Te quedan: ${usd(r.queda)}`:`⚠️ Faltan: ${usd(-r.queda)}`);
+  if(r.items.length){L.push("","🏷️ Si vendes a estos precios en Cuba:");
+    r.items.forEach(i=>L.push(`   • ${i.n}: a ${cup(i.pv)} c/u → ${i.gan>=0?"ganas":"pierdes"} ${cup(Math.abs(i.ganT))}`));
+    L.push(`   Ganancia posible: ${cup(r.ganT)} (dólar a ${Math.round(T())})`,"   Los precios son un ejemplo, tú decides a cuánto vender.");}
+  return L.join("\n");
+}
+function cWaLink(c){return "https://wa.me/"+String(c.wa||"").replace(/\D/g,"")+"?text="+encodeURIComponent(cTexto(c));}
+function cRefresca(){const c=CL.find(x=>x.id===cAct);if(c&&$("clWa"))$("clWa").href=cWaLink(c);}
+document.addEventListener("click",e=>{
+  const b=e.target.closest("button");if(!b)return;const d=b.dataset;
+  if(b.id==="dClientas"){cLista();return;}
+  if(d.cli){cFicha(d.cli);return;}
+  const c=CL.find(x=>x.id===cAct);
+  switch(b.id){
+    case "clAdd":{const n=$("clN").value.trim();if(!n){$("clMsg").textContent="Escribe el nombre.";return;}
+      const x={id:"c"+Date.now(),n,wa:$("clW").value.trim(),env:ENC.pu,gest:ENC.gestion,nb:0,dep:[],items:[]};CL.push(x);cGuardar();cFicha(x.id);return;}
+    case "clVolver":cLista();return;
+    case "clBorrar":$("clConf").hidden=false;return;
+    case "clNo":$("clConf").hidden=true;return;
+    case "clSi":CL=CL.filter(x=>x.id!==cAct);cGuardar();cLista();toast("Clienta borrada");return;
+  }
+  if(!c)return;
+  if(d.cdd!==undefined){c.dep.splice(+d.cdd,1);cGuardar();cFicha(c.id);return;}
+  if(d.cdi!==undefined){c.items.splice(+d.cdi,1);cGuardar();cFicha(c.id);return;}
+  switch(b.id){
+    case "cdAdd":{const m=num($("cdM").value);if(!m){toast("Escribe cuánto te mandó");return;}c.dep.push({m,f:$("cdF").value.trim()});cGuardar();cFicha(c.id);toast("Dinero anotado");return;}
+    case "ciAdd":{const n=$("ciN").value.trim(),q=num($("ciQ").value)||1,co=num($("ciC").value);
+      if(!n||!co){$("ciMsg").textContent="Pon el producto y lo que costó cada uno.";return;}
+      c.items.push({n,q,c:co,b:String(Math.max(1,Math.round(num($("ciB").value)||1)))});if(!num(c.nb))c.nb=1;cGuardar();cFicha(c.id);toast("Compra anotada: "+q+" "+n);return;}
+    case "cbSave":c.nb=Math.max(0,Math.round(num($("cbN").value)));c.env=num($("cbE").value);c.gest=num($("cbG").value);cGuardar();cFicha(c.id);toast("Guardado");return;
+  }
+});
+document.addEventListener("input",e=>{
+  const t=e.target;
+  if(t.id==="ciQ"||t.id==="ciC"){const q=num($("ciQ").value)||1,co=num($("ciC").value);$("ciTot").textContent=co?`Total de esta compra: ${usd(q*co)}`:"";}
+  if(t.dataset&&t.dataset.cpv!==undefined){const c=CL.find(x=>x.id===cAct);if(c){c.items[+t.dataset.cpv].pv=numC(t.value);cGuardar();cRefresca();}}
+});
+document.addEventListener("change",e=>{if(e.target.dataset&&e.target.dataset.cpv!==undefined&&cAct)cFicha(cAct);});
+
 panelDuena();
 fetch(GC+"/counter/TOTAL.json").then(r=>r.ok?r.json():null).then(j=>{
   if(!j)return;const n=parseInt(String(j.count_unique||j.count||"0").replace(/[^0-9]/g,""),10);
