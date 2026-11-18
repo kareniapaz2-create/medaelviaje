@@ -793,6 +793,7 @@ document.addEventListener("click",e=>{if(e.target.id==="dRefresh")panelDuena();i
 const CK="mdev-clientas";
 let CL=[];try{CL=JSON.parse(localStorage.getItem(CK)||"[]")||[];}catch(e){CL=[];}
 let cAct=null;
+const kgF=v=>(Math.round(v*10)/10).toLocaleString("es")+" kg";
 function cGuardar(){try{localStorage.setItem(CK,JSON.stringify(CL));}catch(e){}}
 function cCalc(c){
   const dep=(c.dep||[]).reduce((a,d)=>a+num(d.m),0);
@@ -800,8 +801,9 @@ function cCalc(c){
   const nb=Math.max(0,Math.round(num(c.nb))),envio=nb*num(c.env),gest=nb*num(c.gest),extra=envio+gest;
   const t=T(),uds=(c.items||[]).reduce((a,i)=>a+num(i.q),0);
   const items=(c.items||[]).map(i=>{const q=num(i.q),cu=num(i.c),parte=compras>0?extra*(q*cu)/compras/(q||1):0,puesto=cu+parte;
-    const pv=num(i.pv)||Math.round(puesto*1.3*t/50)*50;const gan=pv-puesto*t;return {...i,q,cu,puesto,pv,gan,ganT:gan*q};});
-  return {dep,compras,nb,envio,gest,extra,queda:dep-compras-extra,uds,items,ganT:items.reduce((a,i)=>a+i.ganT,0),ventaT:items.reduce((a,i)=>a+i.pv*i.q,0)};
+    const pv=num(i.pv)||Math.round(puesto*1.3*t/50)*50;const gan=pv-puesto*t;const kg=i.pm==="t"?num(i.kg):num(i.kg)*q/12;return {...i,q,cu,puesto,pv,gan,ganT:gan*q,kgL:kg};});
+  const cap=num(c.kg)||ENC.kg,porB={};items.forEach(i=>{const k=String(i.b||1);porB[k]=(porB[k]||0)+i.kgL;});
+  return {dep,compras,nb,envio,gest,extra,queda:dep-compras-extra,uds,items,ganT:items.reduce((a,i)=>a+i.ganT,0),ventaT:items.reduce((a,i)=>a+i.pv*i.q,0),cap,porB,kgT:items.reduce((a,i)=>a+i.kgL,0)};
 }
 function cLista(){
   abrir(`<h2>🧾 Mis clientas</h2><p class="note">Solo lo ves tú. Anota lo que te mandan y lo que les compras.</p>
@@ -826,20 +828,25 @@ function cFicha(id){
   <div class="g2"><label class="f" for="cdM">Cuánto (USD)<div class="inp"><span>$</span><input id="cdM" type="text" inputmode="decimal" placeholder="0"></div></label>
   <label class="f" for="cdF">Fecha o nota<div class="inp"><input id="cdF" type="text" value="${esc(hoy())}"></div></label></div>
   <button type="button" class="ghost" id="cdAdd">+ Anotar dinero recibido</button>
+  <h2 style="margin-top:14px">⚖️ Peso de los bultos</h2>
+  ${Object.keys(r.porB).length?Object.keys(r.porB).sort((a,b)=>a-b).map(k=>{const u=r.porB[k],f=r.cap-u,pc=Math.min(100,u/r.cap*100);return `<div class="prod"><div class="top2"><strong>Bulto ${esc(k)}</strong><b>${kgF(u)} de ${kgF(r.cap)}</b></div><div style="height:10px;background:var(--soft);border-radius:6px;overflow:hidden"><div style="height:100%;width:${pc}%;background:var(${f<0?"--bad":"--good"})"></div></div><p class="note" style="color:var(${f<0?"--bad":"--muted"})">${f>=0?"Faltan "+kgF(f)+" para llenarlo":"Se pasa por "+kgF(-f)+". Pasa algo a otro bulto."}</p></div>`;}).join(""):'<p class="note">Anota el peso en cada compra y aquí ves cuánto falta para los '+kgF(r.cap)+'.</p>'}
   <h2 style="margin-top:14px">🛍️ Lo que le compré</h2>
-  ${r.items.map((i,k)=>`<div class="prod"><div class="top2"><div><strong>${i.q} × ${esc(i.n)}</strong><small>Bulto ${esc(i.b||"1")} · ${usd(i.cu)} c/u · puesto en Cuba ${usd(i.puesto)} c/u</small></div><button type="button" class="x" data-cdi="${k}" aria-label="Borrar ${esc(i.n)}">×</button></div>
+  ${r.items.map((i,k)=>`<div class="prod"><div class="top2"><div><strong>${i.q} × ${esc(i.n)}</strong><small>Bulto ${esc(i.b||"1")} · ${usd(i.cu)} c/u · puesto en Cuba ${usd(i.puesto)} c/u${i.kgL?" · "+kgF(i.kgL):""}</small></div><button type="button" class="x" data-cdi="${k}" aria-label="Borrar ${esc(i.n)}">×</button></div>
     <label class="f">Precio de venta en Cuba (CUP c/u) — cámbialo si quieres<div class="inp"><input type="text" inputmode="numeric" data-cpv="${k}" value="${i.pv}"><span>CUP</span></div></label>
     <p class="note" style="color:var(${i.gan>=0?"--good":"--bad"})">${i.gan>=0?"Ganaría":"Perdería"} ${cup(Math.abs(i.gan))} c/u · ${cup(Math.abs(i.ganT))} en total</p></div>`).join("")||'<p class="note">Todavía no hay compras.</p>'}
   <label class="f" for="ciN">Producto<div class="inp"><input id="ciN" type="text" placeholder="Ej.: Blusas"></div></label>
   <div class="g2"><label class="f" for="ciQ">Cantidad<div class="inp"><input id="ciQ" type="text" inputmode="numeric" placeholder="1"></div></label>
   <label class="f" for="ciC">Costo de CADA UNO<div class="inp"><span>$</span><input id="ciC" type="text" inputmode="decimal" placeholder="0"></div></label></div>
   <label class="f" for="ciB">Va en el bulto número<div class="inp"><input id="ciB" type="text" inputmode="numeric" value="${Math.max(1,r.nb)}"></div></label>
+  <div class="g2"><label class="f" for="ciK">Peso (kg)<div class="inp"><input id="ciK" type="text" inputmode="decimal" placeholder="0"><span>kg</span></div></label>
+  <label class="f" for="ciPm">Ese peso es<div class="inp"><select id="ciPm" style="border:0;background:transparent;font:inherit;width:100%"><option value="d">por cada docena</option><option value="t">de todo junto</option></select></div></label></div>
   <p class="note" id="ciTot"></p>
   <button type="button" class="ghost" id="ciAdd">+ Anotar compra</button><p class="note" id="ciMsg"></p>
   <h2 style="margin-top:14px">📦 Bultos y cobros</h2>
   <div class="g2"><label class="f" for="cbN">Cantidad de bultos<div class="inp"><input id="cbN" type="text" inputmode="numeric" value="${r.nb}"></div></label>
   <label class="f" for="cbE">Envío por bulto<div class="inp"><span>$</span><input id="cbE" type="text" inputmode="decimal" value="${num(c.env)}"></div></label></div>
-  <label class="f" for="cbG">Mi gestión por bulto<div class="inp"><span>$</span><input id="cbG" type="text" inputmode="decimal" value="${num(c.gest)}"></div></label>
+  <div class="g2"><label class="f" for="cbG">Mi gestión por bulto<div class="inp"><span>$</span><input id="cbG" type="text" inputmode="decimal" value="${num(c.gest)}"></div></label>
+  <label class="f" for="cbK">Kilos por bulto<div class="inp"><input id="cbK" type="text" inputmode="decimal" value="${r.cap}"><span>kg</span></div></label></div>
   <button type="button" class="ghost" id="cbSave">Guardar bultos</button>
   <p class="note">Precio sugerido = lo que costó puesto en Cuba + 30 %, al dólar de ${Math.round(t)} CUP. Cámbialo cuando quieras.</p>
   <div class="g2"><button type="button" class="ghost" id="clVolver">← Mis clientas</button><button type="button" class="ghost" id="clBorrar">Borrar clienta</button></div>
@@ -850,6 +857,7 @@ function cTexto(c){
   (c.dep||[]).forEach(d=>L.push(`   • ${d.f||""}: ${usd(num(d.m))}`));
   L.push("",`🛍️ Lo que te compré: ${usd(r.compras)}`);
   r.items.forEach(i=>L.push(`   • ${i.q} × ${i.n} (bulto ${i.b||1}) a ${usd(i.cu)} = ${usd(i.q*i.cu)}`));
+  Object.keys(r.porB).sort((a,b)=>a-b).forEach(k=>{if(r.porB[k])L.push(`⚖️ Bulto ${k}: ${kgF(r.porB[k])} de ${kgF(r.cap)}`);});
   L.push("",`📦 Envío: ${r.nb} bulto${r.nb===1?"":"s"} × ${usd(num(c.env))} = ${usd(r.envio)}`,`🤝 Gestión: ${r.nb} × ${usd(num(c.gest))} = ${usd(r.gest)}`,"",
     r.queda>=0?`✅ Te quedan: ${usd(r.queda)}`:`⚠️ Faltan: ${usd(-r.queda)}`);
   if(r.items.length){L.push("","🏷️ Si vendes a estos precios en Cuba:");
@@ -879,13 +887,13 @@ document.addEventListener("click",e=>{
     case "cdAdd":{const m=num($("cdM").value);if(!m){toast("Escribe cuánto te mandó");return;}c.dep.push({m,f:$("cdF").value.trim()});cGuardar();cFicha(c.id);toast("Dinero anotado");return;}
     case "ciAdd":{const n=$("ciN").value.trim(),q=num($("ciQ").value)||1,co=num($("ciC").value);
       if(!n||!co){$("ciMsg").textContent="Pon el producto y lo que costó cada uno.";return;}
-      c.items.push({n,q,c:co,b:String(Math.max(1,Math.round(num($("ciB").value)||1)))});if(!num(c.nb))c.nb=1;cGuardar();cFicha(c.id);toast("Compra anotada: "+q+" "+n);return;}
-    case "cbSave":c.nb=Math.max(0,Math.round(num($("cbN").value)));c.env=num($("cbE").value);c.gest=num($("cbG").value);cGuardar();cFicha(c.id);toast("Guardado");return;
+      c.items.push({n,q,c:co,b:String(Math.max(1,Math.round(num($("ciB").value)||1))),kg:num($("ciK").value),pm:$("ciPm").value});c.nb=Math.max(num(c.nb),+c.items[c.items.length-1].b||1);cGuardar();cFicha(c.id);toast("Compra anotada: "+q+" "+n);return;}
+    case "cbSave":c.nb=Math.max(0,Math.round(num($("cbN").value)));c.env=num($("cbE").value);c.gest=num($("cbG").value);c.kg=num($("cbK").value)||ENC.kg;cGuardar();cFicha(c.id);toast("Guardado");return;
   }
 });
 document.addEventListener("input",e=>{
   const t=e.target;
-  if(t.id==="ciQ"||t.id==="ciC"){const q=num($("ciQ").value)||1,co=num($("ciC").value);$("ciTot").textContent=co?`Total de esta compra: ${usd(q*co)}`:"";}
+  if(["ciQ","ciC","ciK","ciPm"].includes(t.id)){const q=num($("ciQ").value)||1,co=num($("ciC").value),k=num($("ciK").value),kg=$("ciPm").value==="t"?k:k*q/12;$("ciTot").textContent=[co?`Total de esta compra: ${usd(q*co)}`:"",k?`Pesa ${kgF(kg)}`:""].filter(Boolean).join(" · ");}
   if(t.dataset&&t.dataset.cpv!==undefined){const c=CL.find(x=>x.id===cAct);if(c){c.items[+t.dataset.cpv].pv=numC(t.value);cGuardar();cRefresca();}}
 });
 document.addEventListener("change",e=>{if(e.target.dataset&&e.target.dataset.cpv!==undefined&&cAct)cFicha(cAct);});
